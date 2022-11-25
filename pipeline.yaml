@@ -1,0 +1,22 @@
+resources:
+  repositories:
+    - repository: templates.luka.khintibidze
+      type: git
+      name: "Student-Luka Khintibidze/templates.luka.khintibidze"
+
+  
+trigger: none
+
+extends:
+  template: 'build_publish_deploy.yaml@templates'
+  parameters:
+    AgentPoolName: 'Linux-pool'
+    ProjectPath: '/'
+    image_name: 'node'
+    containerRegistry: 'nexus_registry'
+    repository: 'lkhintibidze/template-node'
+    kubernetesServiceConnection: 'azure-devops-luka'
+    namespace: 'lkhintibidze'
+    chartPath: 'helmcharts/bereja'
+    valueFile: 'values.yaml'
+    releaseName: 'node-template'

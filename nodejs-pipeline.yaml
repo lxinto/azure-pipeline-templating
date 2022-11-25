@@ -1,0 +1,101 @@
+parameters:
+    - name: 'AgentPoolName'
+      type: string
+      default: 'Linux-pool'
+    - name: 'CheckoutRepositoryResourceAlias'
+      type: string
+      default: 'self'
+
+### Build Parameters
+    - name: 'ProjectPath'
+      type: string
+      default: /
+
+###docker  parameters
+    - name: image_name
+      type: string
+      default: 'mcr.microsoft.com/dotnet/aspnet:6.0'
+    - name: expose_port
+      type: string
+      default: '5050'
+    - name: entrypoint
+      type: string
+      default: ''
+    - name: containerRegistry
+      type: string
+      default: ''
+    - name: repository
+      type: string
+      default: ''
+    - name: tags
+      type: string
+      default: 'latest'
+    - name: kubernetesServiceConnection
+      type: string
+      default: ''
+    - name: namespace
+      type: string
+      default: ''
+    - name: releasename
+      type: string
+      default: '$(DefinitionName)'
+    - name: chartPath
+      type: string
+      default: ''
+    - name: valueFile
+      type: string
+      default: ''
+
+trigger: none
+
+pool: '${{ parameters.AgentPoolName }}'
+
+stages:
+  - stage: create_dockerfile
+    jobs:
+    - job: 
+      steps:
+      - task: file-creator@6
+        displayName: Build Dockerfile
+        inputs:
+          filepath: 'Dockerfile'
+          filecontent: |
+            FROM node      
+            WORKDIR /usr/src/app      
+            COPY . .      
+            EXPOSE {{ parameters.expose_port }}
+            CMD [ "node", "server.js" ]
+      - task: Docker@2
+        displayName: Build and Push Dockerfile to Nexus
+        inputs:
+          containerRegistry: '${{ parameters.containerRegistry }}'
+          repository: '${{ parameters.repository }}'
+          command: 'buildAndPush'
+          Dockerfile: '**/Dockerfile'
+          tags: ${{ parameters.tags }}
+
+  - stage: deploy_to_env 
+    displayName: Deploy Dockerfile To Environment Using Helm
+    dependsOn: create_dockerfile
+    jobs:
+    - job: 
+      displayName: Begin deployment
+      steps:
+      - task: HelmInstaller@0
+        inputs:
+          helmVersion: '3.8.0'
+          checkLatestHelmVersion: false
+          installKubectl: true
+          checkLatestKubectl: false
+
+      - task: HelmDeploy@0
+        inputs:
+          connectionType: 'Kubernetes Service Connection'
+          kubernetesServiceConnection: '${{ parameters.kubernetesServiceConnection }}'
+          namespace: '${{ parameters.namespace }}'
+          command: 'upgrade'
+          arguments: '--atomic --wait --timeout 30s'
+          releaseName: '${{ parameters.releasename }}'
+          chartType: 'FilePath'
+          chartPath: '$(Build.SourcesDirectory)/helmcharts/bereja'
+          valueFile: '$(Build.SourcesDirectory)/values.yaml'
